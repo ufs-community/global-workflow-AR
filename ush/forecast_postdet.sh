@@ -145,6 +145,11 @@ EOF
     ${NLN} "${FIXgfs}/orog/${CASE}/${CASE}.mx${OCNRES}_oro_data.tile${n}.nc" "${DATA}/INPUT/oro_data.tile${n}.nc"
     ${NLN} "${FIXgfs}/orog/${CASE}/${CASE}_grid.tile${n}.nc"     "${DATA}/INPUT/${CASE}_grid.tile${n}.nc"
   done
+  if [[ "${DO_NEST:-NO}" == YES ]] ; then
+    ${NLN} "${FIXorog}/${CASE}/${CASE}.mx${OCNRES}_oro_data.tile7.nc" "${DATA}/INPUT/oro_data.nest02.tile7.nc"
+    ${NLN} "${FIXorog}/${CASE}/${CASE}_grid.tile7.nc"     "${DATA}/INPUT/${CASE}_grid.nest02.tile7.nc"
+    ${NLN} "${FIXorog}/${CASE}/${CASE}_grid.tile7.nc"     "${DATA}/INPUT/grid.nest02.tile7.nc"
+  fi
 
   _suite_file="${HOMEgfs}/sorc/ufs_model.fd/FV3/ccpp/suites/suite_${CCPP_SUITE}.xml"
   if [[ ! -f ${_suite_file} ]]; then
@@ -206,6 +211,10 @@ EOF
     ${NLN} "${FIXgfs}/ugwd/${CASE}/${CASE}_oro_data_ls.tile${n}.nc" "${DATA}/INPUT/oro_data_ls.tile${n}.nc"
     ${NLN} "${FIXgfs}/ugwd/${CASE}/${CASE}_oro_data_ss.tile${n}.nc" "${DATA}/INPUT/oro_data_ss.tile${n}.nc"
   done
+  if [[ "${DO_NEST:-NO}" == YES ]] ; then
+    ${NLN} "${FIXugwd}/${CASE}/${CASE}_oro_data_ls.tile7.nc" "${DATA}/INPUT/oro_data_ls.nest02.tile7.nc"
+    ${NLN} "${FIXugwd}/${CASE}/${CASE}_oro_data_ss.tile7.nc" "${DATA}/INPUT/oro_data_ss.nest02.tile7.nc"
+  fi
 
   # GFS standard input data
 
@@ -384,10 +393,16 @@ EOF
   fi
 
   # Conserve total energy as heat globally
-  consv_te=${consv_te:-1.} # range 0.-1., 1. will restore energy to orig. val. before physics
+  if [[ "${DO_NEST:-NO}" == YES ]] ; then
+    consv_te=0
+    k_split=${k_split:-1}
+    k_split_nest=${k_split_nest:-4}
+  else
+    consv_te=${consv_te:-1.} # range 0.-1., 1. will restore energy to orig. val. before physics
+    k_split=${k_split:-2}
+  fi
 
   # time step parameters in FV3
-  k_split=${k_split:-2}
   n_split=${n_split:-5}
 
   if [[ "${MONO:0:4}" = "mono" ]]; then # monotonic options
@@ -481,6 +496,10 @@ EOF
       if [[ ${WRITE_DOPOST} = ".true." ]]; then
         ${NLN} "${COM_ATMOS_MASTER}/${RUN}.t${cyc}z.master.grb2f${FH3}" "GFSPRS.GrbF${FH2}"
         ${NLN} "${COM_ATMOS_MASTER}/${RUN}.t${cyc}z.sfluxgrbf${FH3}.grib2" "GFSFLX.GrbF${FH2}"
+        if [[ "${DO_NEST:-NO}" == YES ]] ; then
+            ${NLN} "${COM_ATMOS_MASTER}/${RUN}.t${cyc}z.nest.grb2f${FH3}" "GFSPRS.GrbF${FH2}.nest02"
+            ${NLN} "${COM_ATMOS_MASTER}/${RUN}.t${cyc}z.nest.sfluxgrbf${FH3}.grib2" "GFSFLX.GrbF${FH2}.nest02"
+        fi
       fi
     done
   else  # TODO: Is this even valid anymore?
@@ -499,7 +518,12 @@ FV3_nml(){
   echo "SUB ${FUNCNAME[0]}: Creating name lists and model configure file for FV3"
   # Call child scripts in current script directory
   source "${USHgfs}/parsing_namelists_FV3.sh"
-  FV3_namelists
+  if [[ "${DO_NEST:-NO}" == YES ]] ; then
+      FV3_namelists global_with_nest
+      FV3_namelists nest
+  else
+      FV3_namelists #default to global without nest
+  fi
   echo "SUB ${FUNCNAME[0]}: FV3 name lists and model configure file created"
 }
 

@@ -75,7 +75,7 @@ for MEMDIR in "${MEMDIR_ARRAY[@]}"; do
         err=$((err + rc))
       done
       if (( ntiles > 6 )); then
-        ln -snf "${COM_ATMOS_INPUT}/${ftype}.tile7.nc" "${COM_ATMOS_INPUT}/${ftype}.nest02.tile7.nc"
+        ${NLN} "${COM_ATMOS_INPUT}/${ftype}.tile7.nc" "${COM_ATMOS_INPUT}/${ftype}.nest02.tile7.nc"
       fi
     done
   fi
