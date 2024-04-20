@@ -32,6 +32,8 @@ source "./tests/module-setup.sh"
 MAKE_OPT="-DAPP=${APP} -D32BIT=ON -DCCPP_SUITES=${CCPP_SUITES}"
 [[ ${PDLIB:-"OFF"} = "ON" ]] && MAKE_OPT+=" -DPDLIB=ON"
 [[ ${BUILD_TYPE:-"Release"} = "Debug" ]] && MAKE_OPT+=" -DDEBUG=ON"
+#MAKE_OPT+=" -DFASTER=ON"  #comment out this line for the global_nest runs
+
 COMPILE_NR=0
 CLEAN_BEFORE=YES
 CLEAN_AFTER=NO
