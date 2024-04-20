@@ -38,4 +38,8 @@ case "${CASE}" in
     ;;
 esac
 
+if [[ "${DO_NEST:-NO}" == "YES" ]] ; then
+  export CPL_ATMIC=UFS-AR_${CASE}
+fi
+
 echo "END: config.stage_ic"
