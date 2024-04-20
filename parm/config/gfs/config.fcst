@@ -135,7 +135,7 @@ fi
 
 # PBL/turbulance schemes
 export hybedmf=".false."
-if [[ "${DO_NEST:-NO}" == YES ]] ; then
+if [[ "${CCPP_SUITE}" == "FV3_global_nest"* ]]; then
   export satmedmf=".false."
 else
   export satmedmf=".true."
@@ -212,7 +212,7 @@ case ${imp_physics} in
         export dddmp=0.1
         export d4_bg=0.12
 
-        if [[ "${DO_NEST:-NO}" == YES ]] ; then
+        if [[ "${CCPP_SUITE}" == "FV3_global_nest"* ]]; then
           export FIELD_TABLE="${PARMgfs}/ufs/fv3/field_table_thompson_aero_tke${tbp}"
           export ltaerosol=".true."
           export lcnorm=".true."
