@@ -186,10 +186,10 @@ export DOBNDPNT_WAVE="NO"
 export FRAC_GRID=".true."
 export DO_NEST="NO" # Whether to run a global-nested domain
 if [[ "${DO_NEST:-NO}" == "YES" ]] ; then
-  ntiles=7
+  export ntiles=7
   export NEST_OUTPUT_GRID="regional_latlon"
 else
-  ntiles=6
+  export ntiles=6
   export NEST_OUTPUT_GRID=""
 fi
 
