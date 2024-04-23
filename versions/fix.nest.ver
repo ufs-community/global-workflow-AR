@@ -1,7 +1,4 @@
 #!/bin/bash
 # Fix file subfolder versions
-source "${HOMEgfs:-}/versions/fix.ver"
-
-export am_ver=global-nest.20240419
 export orog_ver=global-nest.20240419
 export ugwd_ver=global-nest.20240419

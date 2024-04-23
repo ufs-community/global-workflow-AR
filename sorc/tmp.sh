@@ -74,7 +74,7 @@ case "${machine}" in
   "wcoss2")   FIX_DIR="/lfs/h2/emc/global/noscrub/emc.global/FIX/fix" ;;
   "hera")     
     if [[ "${LINK_NEST:-OFF}" == "ON" ]] ; then
-      FIX_DIR="/scratch2/BMC/wrfruc/Guoqing.Ge/fix"
+      FIX_DIR="/another/location/global/glopara/fix"
     else
       FIX_DIR="/scratch1/NCEPDEV/global/glopara/fix"
     fi

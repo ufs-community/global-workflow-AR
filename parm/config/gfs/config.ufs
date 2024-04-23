@@ -337,9 +337,10 @@ export cplice=".false."
 export cplchm=".false."
 export cplwav=".false."
 export cplwav2atm=".false."
-export CCPP_SUITE="FV3_GFS_v17_p8_ugwpv1"
 if [[ "${DO_NEST:-NO}" == YES ]] ; then
   export CCPP_SUITE="${CCPP_SUITE:-FV3_global_nest_v1}"
+else
+  export CCPP_SUITE="${CCPP_SUITE:-FV3_GFS_v17_p8_ugwpv1}"
 fi
 model_list="atm"
 
