@@ -121,9 +121,6 @@ FV3_predet(){
   IAUFHRS=${IAUFHRS:-0}
   IAU_DELTHRS=${IAU_DELTHRS:-0}
 
-  # Model config options
-  ntiles=6
-
   rCDUMP=${rCDUMP:-${CDUMP}}
 
   #------------------------------------------------------------------
