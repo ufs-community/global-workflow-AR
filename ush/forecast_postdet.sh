@@ -21,6 +21,10 @@ FV3_postdet() {
         fv3_input_files+=("${tt}.tile${nn}.nc")
       done
     done
+    if [[ "${DO_NEST:-NO}" == "YES" ]] ; then
+      fv3_input_files+=("gfs_data.nest02.tile7.nc")
+      fv3_input_files+=("sfc_data.nest02.tile7.nc")
+    fi
 
     echo "Copying FV3 cold start files for 'RUN=${RUN}' at '${current_cycle}' from '${COM_ATMOS_INPUT}'"
     for fv3_input_file in "${fv3_input_files[@]}"; do
