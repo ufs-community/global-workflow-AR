@@ -137,14 +137,15 @@ for dir in aer \
             mom6 \
             sfc_climo \
             verif \
-            wave
+            wave \
+            product \
+            gdas
 do
   if [[ -d "${dir}" ]]; then
     [[ "${RUN_ENVIR}" == "nco" ]] && chmod -R 755 "${dir}"
     rm -rf "${dir}"
   fi
-  fix_ver="${dir}_ver"
-  ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
+  ln -snf ../"${dir}" .
 done
 for dir in orog \
            ugwd
