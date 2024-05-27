@@ -10,7 +10,7 @@ function usage() {
 Builds all of the global-workflow components by calling the individual build
   scripts in sequence.
 
-Usage: ${BASH_SOURCE[0]} [-h][-o][--nest]
+Usage: ${BASH_SOURCE[0]} [-h][-o]
   -h:
     Print this help message and exit
   -o:
@@ -23,17 +23,12 @@ RUN_ENVIR="emc"
 
 # Reset option counter in case this script is sourced
 OPTIND=1
-while getopts ":ho-:" option; do
+while getopts ":ho" option; do
   case "${option}" in
     h) usage ;;
     o)
       echo "-o option received, configuring for NCO"
       RUN_ENVIR="nco";;
-    -)
-      if [[ "${OPTARG}" == "nest" ]]; then
-        LINK_NEST=ON
-      fi
-      ;;
     :)
       echo "[${BASH_SOURCE[0]}]: ${option} requires an argument"
       usage
@@ -105,9 +100,7 @@ ${LINK} "${HOMEgfs}/sorc/wxflow/src/wxflow" .
 # Link fix directories
 if [[ -n "${FIX_DIR}" ]]; then
   if [[ ! -d "${HOMEgfs}/fix" ]]; then mkdir "${HOMEgfs}/fix" || exit 1; fi
-  if [[ "${LINK_NEST:-OFF}" == "ON" ]] ; then
-    if [[ ! -d "${HOMEgfs}/fix/nest" ]]; then mkdir "${HOMEgfs}/fix/nest" || exit 1; fi
-  fi
+  if [[ ! -d "${HOMEgfs}/fix/nest" ]]; then mkdir "${HOMEgfs}/fix/nest" || exit 1; fi
 fi
 cd "${HOMEgfs}/fix" || exit 1
 for dir in aer \
@@ -132,39 +125,37 @@ do
   fix_ver="${dir}_ver"
   ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
 done
-if [[ "${LINK_NEST:-OFF}" == "ON" ]] ; then
-  cd "${HOMEgfs}/fix/nest" || exit 1
-  for dir in aer \
-              am \
-              chem \
-              cice \
-              cpl \
-              datm \
-              gsi \
-              lut \
-              mom6 \
-              sfc_climo \
-              verif \
-              wave
-  do
-    if [[ -d "${dir}" ]]; then
-      [[ "${RUN_ENVIR}" == "nco" ]] && chmod -R 755 "${dir}"
-      rm -rf "${dir}"
-    fi
-    fix_ver="${dir}_ver"
-    ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
-  done
-  for dir in orog \
-             ugwd
-  do
-    if [[ -d "${dir}" ]]; then
-      [[ "${RUN_ENVIR}" == "nco" ]] && chmod -R 755 "${dir}"
-      rm -rf "${dir}"
-    fi
-    fix_ver="${dir}_nest_ver"
-    ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
-  done
-fi
+cd "${HOMEgfs}/fix/nest" || exit 1
+for dir in aer \
+            am \
+            chem \
+            cice \
+            cpl \
+            datm \
+            gsi \
+            lut \
+            mom6 \
+            sfc_climo \
+            verif \
+            wave
+do
+  if [[ -d "${dir}" ]]; then
+    [[ "${RUN_ENVIR}" == "nco" ]] && chmod -R 755 "${dir}"
+    rm -rf "${dir}"
+  fi
+  fix_ver="${dir}_ver"
+  ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
+done
+for dir in orog \
+           ugwd
+do
+  if [[ -d "${dir}" ]]; then
+    [[ "${RUN_ENVIR}" == "nco" ]] && chmod -R 755 "${dir}"
+    rm -rf "${dir}"
+  fi
+  fix_ver="${dir}_nest_ver"
+  ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
+done
 
 
 #---------------------------------------
