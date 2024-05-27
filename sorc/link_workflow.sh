@@ -10,7 +10,7 @@ function usage() {
 Builds all of the global-workflow components by calling the individual build
   scripts in sequence.
 
-Usage: ${BASH_SOURCE[0]} [-h][-o][--nest]
+Usage: ${BASH_SOURCE[0]} [-h][-o]
   -h:
     Print this help message and exit
   -o:
@@ -23,17 +23,12 @@ RUN_ENVIR="emc"
 
 # Reset option counter in case this script is sourced
 OPTIND=1
-while getopts ":ho-:" option; do
+while getopts ":ho" option; do
   case "${option}" in
     h) usage ;;
     o)
       echo "-o option received, configuring for NCO"
       RUN_ENVIR="nco";;
-    -)
-      if [[ "${OPTARG}" == "nest" ]]; then
-        LINK_NEST=ON
-      fi
-      ;;
     :)
       echo "[${BASH_SOURCE[0]}]: ${option} requires an argument"
       usage
@@ -83,10 +78,6 @@ esac
 
 # Source fix version file
 source "${HOMEgfs}/versions/fix.ver"
-# global-nest uses different versions of orog and ugwd
-if [[ "${LINK_NEST:-OFF}" == "ON" ]] ; then
-  source "${HOMEgfs}/versions/fix.nest.ver"
-fi
 
 # Link python pacakges in ush/python
 # TODO: This will be unnecessary when these are part of the virtualenv
@@ -132,6 +123,17 @@ do
   fi
   fix_ver="${dir}_ver"
   ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${dir}"
+done
+for dir in orog \
+           ugwd
+do
+  nestdir="${dir}_nest"
+  if [[ -d "${nestdir}" ]]; then
+    [[ "${RUN_ENVIR}" == "nco" ]] && chmod -R 755 "${nestdir}"
+    rm -rf "${nestdir}"
+  fi
+  fix_ver="${nestdir}_ver"
+  ${LINK_OR_COPY} "${FIX_DIR}/${dir}/${!fix_ver}" "${nestdir}"
 done
 
 
