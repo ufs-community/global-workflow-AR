@@ -224,9 +224,9 @@ case "${fv3_res}" in
           export NEST_DLON=0.0625
           export NEST_DLAT=0.0625
           export WRITE_GROUP=2
-          export WRTTASK_PER_GROUP_PER_THREAD_PER_TILE=20
+          export WRTTASK_PER_GROUP_PER_THREAD_PER_TILE=30
           export WRITE_GROUP_GFS=2
-          export WRTTASK_PER_GROUP_PER_THREAD_PER_TILE_GFS=20
+          export WRTTASK_PER_GROUP_PER_THREAD_PER_TILE_GFS=30
         else
           export DELTIM=300
           export layout_x=8
