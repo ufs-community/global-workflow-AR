@@ -136,7 +136,7 @@ cat > "${nml_file}" <<EOF
   npy = ${npy_here}
   ntiles = ${ntiles_here}
   ${nested_here:+nested = ${nested_here}}
-  ${twowaynest_here:+twowaynest = ${twowaynest_herei}}
+  ${twowaynest_here:+twowaynest = ${twowaynest_here}}
   ${nestupdate_here:+nestupdate = ${nestupdate_here}}
   npz = ${npz}
   dz_min =  ${dz_min:-"6"}
