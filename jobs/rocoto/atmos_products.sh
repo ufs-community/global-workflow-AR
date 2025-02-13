@@ -13,23 +13,20 @@ status=$?
 if (( status != 0 )); then exit "${status}"; fi
 
 export job="atmos_products"
-export jobid="${job}.$$"
 
-###############################################################
-# shellcheck disable=SC2153,SC2001
-IFS='_' read -ra fhrs <<< "${FHRLST//f}" # strip off the 'f's and convert to array
+# shellcheck disable=SC2153
+IFS=', ' read -r -a fhr_list <<< "${FHR_LIST}"
 
-#---------------------------------------------------------------
-# Execute the JJOB
-for fhr in "${fhrs[@]}"; do
-    # The analysis fhr is -001.  Performing math on negative, leading 0 integers is tricky.
-    # The negative needs to be in front of "10#", so do some regex magic to make it happen.
-    fhr="10#${fhr}"
-    fhr=${fhr//10\#-/-10\#}
-    export FORECAST_HOUR=$(( fhr ))
-    "${HOMEgfs}/jobs/JGLOBAL_ATMOS_PRODUCTS"
-    status=$?
-    if (( status != 0 )); then exit "${status}"; fi
+export FORECAST_HOUR jobid
+for FORECAST_HOUR in "${fhr_list[@]}"; do
+	fhr3=$(printf '%03d' "${FORECAST_HOUR}")
+	jobid="${job}_f${fhr3}.$$"
+	###############################################################
+	# Execute the JJOB
+	###############################################################
+	"${HOMEgfs}/jobs/JGLOBAL_ATMOS_PRODUCTS"
+	status=$?
+	[[ ${status} -ne 0 ]] && exit "${status}"
 done
 
 exit 0

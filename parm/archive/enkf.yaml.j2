@@ -2,24 +2,54 @@ enkf:
     name: "ENKF"
     target: "{{ ATARDIR }}/{{ cycle_YMDH }}/{{ RUN }}.tar"
     required:
+        # Logs
+        {% if RUN == 'enkfgdas' %}
+        {% for mem in range(1, nmem_ens + 1) %}
+        - "logs/{{ cycle_YMDH }}/{{ RUN }}_fcst_mem{{ '%03d' % mem }}.log"
+        {% endfor %}
+        {% for fhr in range(fhmin, fhmax + 1, fhout) %}
+        - "logs/{{ cycle_YMDH }}/{{ RUN }}_epos{{ '%03d' % (fhr - fhmin) }}.log"
+        {% endfor %}
+        - "logs/{{ cycle_YMDH }}/{{ RUN }}_echgres.log"
+        {% endif %}
+        - "logs/{{ cycle_YMDH }}/{{ RUN }}_esfc.log"
+        {% for grp in range(IAUFHRS | length) %}
+        - "logs/{{ cycle_YMDH }}/{{ RUN }}_ecen{{ '%03d' % grp }}.log"
+        {% endfor %}
+
+        {% if lobsdiag_forenkf %}
+           {% if DO_JEDIATMENS %}
+              {% set steps = ["atmensanlinit", "atmensanlobs", "atmensanlsol", "atmensanlfv3inc", "atmensanlfinal"] %}
+           {% else %}
+              {% set steps = ["eobs", "ediag", "eupd"] %}
+           {% endif %}
+        {% else %}
+           {% if DO_JEDIATMENS %}
+              {% set steps = ["atmensanlinit", "atmensanlletkf", "atmensanlfv3inc", "atmensanlfinal"] %}
+           {% else %}
+              {% set steps = ["eobs", "eupd"] %}
+              {% for mem in range(1, nmem_ens + 1) %}
+                 {% do steps.append("eomg_mem" ~ '%03d' % mem) %}
+              {% endfor %}
+           {% endif %}
+        {% endif %}
+
+        {% for step in steps %}
+        - "logs/{{ cycle_YMDH }}/{{ RUN }}_{{ step }}.log"
+        {% endfor %}
+
+        # Ensemble mean and spread
+        {% if RUN == 'enkfgdas' %}
         {% for fhr in range(3, fhmax + 1, 3) %}
-        - "{{ COM_ATMOS_HISTORY_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmf{{ '%03d' % fhr }}.ensmean.nc"
-        - "{{ COM_ATMOS_HISTORY_ENSSTAT | relpath(ROTDIR) }}/{{ head }}sfcf{{ '%03d' % fhr }}.ensmean.nc"
+        - "{{ COMIN_ATMOS_HISTORY_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmf{{ '%03d' % fhr }}.ensmean.nc"
+        - "{{ COMIN_ATMOS_HISTORY_ENSSTAT | relpath(ROTDIR) }}/{{ head }}sfcf{{ '%03d' % fhr }}.ensmean.nc"
         {% if ENKF_SPREAD %}
-        - "{{ COM_ATMOS_HISTORY_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmf{{ '%03d' % fhr }}.ensspread.nc"
+        - "{{ COMIN_ATMOS_HISTORY_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmf{{ '%03d' % fhr }}.ensspread.nc"
         {% endif %}
         {% endfor %}
-        {% for mem in range(1, nmem_ens + 1) %}
-        - "logs/{{ cycle_YMDH }}/{{ RUN }}fcst_mem{{ '%03d' % mem }}.log"
-        {% endfor %}
-        - "logs/{{ cycle_YMDH }}/{{ RUN }}epos*.log"
-        - "logs/{{ cycle_YMDH }}/{{ RUN }}echgres.log"
+        {% endif %}
 
-        {% if current_cycle != SDATE %}
-        # TODO archive ecen logs based on actual groups.  Will need to emulate numpy.array_split to do so.
-        - "logs/{{ cycle_YMDH }}/{{ RUN }}ecen*.log"
-        - "logs/{{ cycle_YMDH }}/{{ RUN }}esfc.log"
-
+        # Ensemble mean state
         {% if not DO_JEDIATMENS %}
         {% set da_files = ["enkfstat",
                            "gsistat.ensmean",
@@ -27,48 +57,51 @@ enkf:
                            "oznstat.ensmean",
                            "radstat.ensmean"] %}
         {% else %}
-        {% set da_files = ["atmens.yaml",
+        {% if lobsdiag_forenkf %}
+        {% set da_files = ["atmensanlobs.yaml",
+                           "atmensanlsol.yaml",
+                           "atmensanlfv3inc.yaml",
+                           "atminc.ensmean.nc",
+                           "atmensstat"] %}
+        {% else %}
+        {% set da_files = ["atmensanlletkf.yaml",
+                           "atmensanlfv3inc.yaml",
                            "atminc.ensmean.nc",
                            "atmensstat"] %}
         {% endif %}
+        {% endif %}
         {% for file in da_files %}
-        - "{{ COM_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}{{ file }}"
+        - "{{ COMIN_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}{{ file }}"
         {% endfor %}
-        {% if DOIAU %}
-        {% for fhr in iaufhrs %}
-        {% if fhr == IAU_OFFSET %}
+
+        {% if DO_JEDISNOWDA %}
+        - "{{ COMIN_SNOW_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}snowstat.tgz"
+        {% for itile in range(1,7) %}
+        # Snow analysis is 3dvar
+        - "{{ COMIN_SNOW_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/snowinc.{{ cycle_YMD }}.{{ cycle_HH }}0000.sfc_data.tile{{ itile }}.nc"
+        {% endfor %}
+        {% endif %}
+
+        # Ensemble mean analyses/increments
+        # 6-hr analysis/increment
         {% if do_calc_increment %}
-        - "{{ COM_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmanl.ensmean.nc"
-        {% endif %}  # calc increment
-        {% else %}  # fhr != IAU_OFFSET
-        - "{{ COM_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmi{{ '%03d' % fhr }}.ensmean.nc"
-        {% endif %}  # fhr == IAU_OFFSET
-        {% endfor %}  # IAUFHRS
-        {% endif %}   # DOIAU
-
-        {% if DO_JEDIATMENS %}
-        {% set steps = ["atmensanlinit", "atmensanlrun", "atmensanlfinal"] %}
+        - "{{ COMIN_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmanl.ensmean.nc"
         {% else %}
-        {% set steps = ["eobs", "eupd"] %}
-        {% if lobsdiag_forenkf %}
-        {% do steps.append("ediag") %}
-        {% else %}
-        {% for mem in range(1, nmem_ens + 1) %}
-        {% do steps.append("eomg_mem{{ '%03d' % mem }}") %}
-        {% endfor %}
-        {% endif %}
+        - "{{ COMIN_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atminc.ensmean.nc"
         {% endif %}
 
-        {% for step in steps %}
-        - "logs/{{ cycle_YMDH }}/{{ RUN }}{{ step }}.log"
-        {% endfor %}
-        {% endif %}  # not the first cycle
-    optional:
-        {% if current_cycle != SDATE and DOIAU %}
-        {% for fhr in iaufhrs %}
-        {% if fhr != IAU_OFFSET %}
-        - "{{ COM_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atma{{ '%03d' % fhr }}.ensmean.nc"
-        - "{{ COM_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmi{{ '%03d' % fhr }}.ensmean.nc"
-        {% endif %}  # fhr == IAU_OFFSET
-        {% endfor %}  # IAUFHRS
+        {% if DOIAU %}
+        # IAU increments/analyses
+
+        {% for fhr in IAUFHRS if fhr != 6 %}
+        {% if do_calc_increment %}
+        # Store analyses instead of increments
+        - "{{ COMIN_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atma{{ '%03d' % fhr }}.ensmean.nc"
+        {% else %}
+        # Store increments
+        - "{{ COMIN_ATMOS_ANALYSIS_ENSSTAT | relpath(ROTDIR) }}/{{ head }}atmi{{ '%03d' % fhr }}.ensmean.nc"
         {% endif %}
+        {% endfor %}
+
+        {% endif %}  # End IAU
+        # End of analysis mean increments/analyses

@@ -10,34 +10,16 @@ echo "BEGIN: config.wave"
 # Some others are also used across the workflow in wave component scripts
 
 # General runtime labels
-export CDUMPwave="${RUN}wave"
+export RUNwave="${RUN}wave"
 
 # In GFS/GDAS, restart files are generated/read from gdas runs
-export CDUMPRSTwave="gdas"
+export RUNRSTwave="gdas"
 
 #grid dependent variable defaults
-export waveGRDN='1'                   # grid number for ww3_multi
-export waveGRDG='10'                  # grid group for ww3_multi
-export USE_WAV_RMP='NO'               # YES/NO rmp grid remapping pre-processed coefficients
-export waveMULTIGRID='.false.'        # .true./.false. for multi or shel
 export MESH_WAV="mesh.${waveGRD}.nc"  # Mesh grid for wave model for CMEPS
-export waveesmfGRD=' '                # input grid for multigrid
 
 #Grid dependent variables for various grids
 case "${waveGRD}" in
-  "gnh_10m;aoc_9km;gsh_15m")
-    #GFSv16 settings:
-    export waveGRDN='1 2 3'
-    export waveGRDG='10 20 30'
-    export USE_WAV_RMP='YES'
-    export waveMULTIGRID='.true.'
-    export IOSRV='3'
-    export MESH_WAV=' '
-    export waveesmfGRD='glox_10m'
-    export waveuoutpGRD='points'
-    export waveinterpGRD='glo_15mxt at_10m ep_10m wc_10m glo_30m'
-    export wavepostGRD='gnh_10m aoc_9km gsh_15m'
-    ;;
   "gwes_30m")
     #Grid used for P8
     export waveinterpGRD=''
@@ -56,6 +38,12 @@ case "${waveGRD}" in
     export wavepostGRD='glo_025'
     export waveuoutpGRD=${waveGRD}
     ;;
+  "glo_100")
+    #Global regular lat/lon 1deg deg grid
+    export waveinterpGRD=''
+    export wavepostGRD='glo_100'
+    export waveuoutpGRD=${waveGRD}
+    ;;
   "glo_200")
     #Global regular lat/lon 2deg deg grid
     export waveinterpGRD=''
@@ -68,15 +56,15 @@ case "${waveGRD}" in
     export wavepostGRD='glo_500'
     export waveuoutpGRD=${waveGRD}
     ;;
+  "uglo_15km")
+    # unstructured 15km grid
+    export waveinterpGRD='glo_15mxt at_10m ep_10m wc_10m glo_30m'
+    export wavepostGRD=''
+    export waveuoutpGRD=${waveGRD}
+    ;; 
   "uglo_100km")
     #unstructured 100km grid
     export waveinterpGRD='glo_200'
-    export wavepostGRD=''
-    export waveuoutpGRD=${waveGRD}
-    ;;
-  "uglo_m1g16")
-    #unstructured m1v16 grid
-    export waveinterpGRD='glo_15mxt'
     export wavepostGRD=''
     export waveuoutpGRD=${waveGRD}
     ;;
@@ -96,7 +84,7 @@ if [[ "${RUN}" == "gfs" ]]; then
 fi
 export WAVHINDH=0
 export FHMAX_WAV_IBP=180
-if (( FHMAX_WAV < FHMAX_WAV_IBP )); then export FHMAX_WAV_IBP=${FHMAX_GFS} ; fi
+if (( FHMAX_WAV < FHMAX_WAV_IBP )); then export FHMAX_WAV_IBP=${FHMAX_WAV} ; fi
 
 # gridded and point output rate
 export DTFLD_WAV=$(( FHOUT_HF_WAV * 3600 ))
@@ -111,7 +99,7 @@ if [[ "${RUN}" == "gdas" ]]; then
   export WAVNCYC=4
   export WAVHCYC=${assim_freq:-6}
   export FHMAX_WAV_CUR=48 # RTOFS forecasts only out to 8 days
-elif [[ ${gfs_cyc} -ne 0 ]]; then
+elif (( INTERVAL_GFS > 0 )); then
   export WAVHCYC=${assim_freq:-6}
   export FHMAX_WAV_CUR=192 # RTOFS forecasts only out to 8 days
 else
@@ -181,7 +169,7 @@ export WW3CURIENS='F'
 export GOFILETYPE=1     # GOFILETYPE=1 one gridded file per output step
 export POFILETYPE=1     # POFILETYPE=1 one point file per output step
 
-# Parameters for ww3_multi/shel.inp
+# Parameters for ww3_shel.inp
 # Unified output T or F
 export FUNIPNT='T'
 # Output server type (see ww3_shel/multi.inp in WW3 repo)

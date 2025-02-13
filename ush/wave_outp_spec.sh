@@ -31,6 +31,7 @@ source "${USHgfs}/preamble.sh"
   workdir=$4
 
   YMDHE=$($NDATE $FHMAX_WAV_PNT $CDATE)
+  model_start_date=$(${NDATE} ${OFFSET_START_HOUR} "${PDY}${cyc}")
 
   cd $workdir
 
@@ -73,21 +74,7 @@ source "${USHgfs}/preamble.sh"
     exit 1
   else
     buoy=$bloc
-    grep $buoy ${DATA}/buoy_log.ww3 > tmp_list.loc
-    while read line
-    do
-      buoy_name=$(echo $line | awk '{print $2}')
-      if [ $buoy = $buoy_name ]
-      then
-        point=$(echo $line | awk '{ print $1 }')
-        set +x
-        echo "              Location ID/#   : $buoy (${point})"
-        echo "   Spectral output start time : $ymdh "
-        echo ' '
-        set_trace
-        break
-      fi
-    done < tmp_list.loc
+    point=$(awk "{if (\$2 == \"${buoy}\"){print \$1; exit} }" "${DATA}/buoy_log.ww3")
     if [ -z "$point" ]
     then
       set +x
@@ -97,6 +84,11 @@ source "${USHgfs}/preamble.sh"
       echo ' '
       set_trace
       exit 2
+    else
+      set +x
+      echo "              Location ID/#   : $buoy (${point})"
+      echo "   Spectral output start time : $ymdh "
+      echo ' '
     fi
   fi
 
@@ -169,21 +161,21 @@ source "${USHgfs}/preamble.sh"
 
 # 2.b Run the postprocessor
 
+  export pgm="${NET,,}_ww3_outp.x"
+  source prep_step
+
   set +x
-  echo "   Executing ${EXECgfs}/ww3_outp"
+  echo "   Executing ${EXECgfs}/${pgm}"
   set_trace
 
-  export pgm=ww3_outp;. prep_step
-  ${EXECgfs}/ww3_outp 1> outp_${specdir}_${buoy}.out 2>&1
+  "${EXECgfs}/${pgm}" 1> outp_${specdir}_${buoy}.out 2>&1
   export err=$?;err_chk
-
-
   if [ "$err" != '0' ]
   then
     set +x
     echo ' '
     echo '******************************************** '
-    echo '*** FATAL ERROR : ERROR IN ww3_outp *** '
+    echo '*** FATAL ERROR : ERROR IN ${pgm} *** '
     echo '******************************************** '
     echo ' '
     set_trace
@@ -196,38 +188,38 @@ source "${USHgfs}/preamble.sh"
 
   if [ -f $outfile ]
   then
-   if [ "${ymdh}" = "${CDATE}" ]
+   if [ "${ymdh}" = "${model_start_date}" ]
    then
      if [ "$specdir" = "bull" ]
      then
-       cat $outfile | sed -e '9,$d' >> ${STA_DIR}/${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.bull
-       cat $coutfile | sed -e '8,$d' >> ${STA_DIR}/c${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.cbull
+       sed '9,$d' "${outfile}" >> "${STA_DIR}/${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.bull"
+       sed '8,$d' "${coutfile}" >> "${STA_DIR}/c${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.cbull"
      else
-       cat $outfile >> ${STA_DIR}/${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.spec
+       cat $outfile >> "${STA_DIR}/${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.spec"
      fi
    elif [ "${ymdh}" = "${YMDHE}" ]
    then
      if [ "$specdir" = "bull" ]
      then
-       cat $outfile | sed -e '1,7d' >> ${STA_DIR}/${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.bull
-       cat $coutfile | sed -e '1,6d' >> ${STA_DIR}/c${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.cbull
+       sed '1,7d' "${outfile}" >> "${STA_DIR}/${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.bull"
+       sed '1,6d' "${coutfile}" >> "${STA_DIR}/c${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.cbull"
      else
-       cat $outfile | sed -n "/^${YMD} ${HMS}$/,\$p" >> ${STA_DIR}/${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.spec
+       sed -n "/^${YMD} ${HMS}$/,\$p" "${outfile}" >> "${STA_DIR}/${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.spec"
      fi
    else
      if [ "$specdir" = "bull" ]
      then
-       cat $outfile | sed -e '1,7d' | sed -e '2,$d' >> ${STA_DIR}/${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.bull
-       cat $coutfile | sed -e '1,6d' | sed -e '2,$d' >> ${STA_DIR}/c${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.cbull
+       sed '8q;d' "${outfile}" >> "${STA_DIR}/${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.bull"
+       sed '7q;d' "${coutfile}" >> "${STA_DIR}/c${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.cbull"
      else
-       cat $outfile | sed -n "/^${YMD} ${HMS}$/,\$p" >> ${STA_DIR}/${specdir}fhr/$WAV_MOD_TAG.${ymdh}.$buoy.spec
+       sed -n "/^${YMD} ${HMS}$/,\$p" "${outfile}" >> "${STA_DIR}/${specdir}fhr/${WAV_MOD_TAG}.${ymdh}.${buoy}.spec"
      fi
    fi
   else
     set +x
     echo ' '
     echo '***************************************************************** '
-    echo '*** FATAL ERROR : OUTPUT DATA FILE FOR BOUY $bouy NOT FOUND *** '
+    echo "*** FATAL ERROR : OUTPUT DATA FILE FOR BOUY ${bouy} NOT FOUND *** "
     echo '***************************************************************** '
     echo ' '
     set_trace
@@ -237,6 +229,6 @@ source "${USHgfs}/preamble.sh"
 # 3.b Clean up the rest
 
 cd ..
-rm -rf ${specdir}_${bloc}
+rm -rf "${specdir}_${bloc}"
 
 # End of ww3_outp_spec.sh ---------------------------------------------------- #

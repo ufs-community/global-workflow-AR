@@ -12,18 +12,11 @@ if [[ ${DONST} = "YES" ]]; then
   . ${EXPDIR}/config.nsst
 fi
 
-if [[ "${CDUMP}" = "gfs" ]] ; then
+if [[ "${RUN}" == "gfs" ]] ; then
   export USE_RADSTAT="NO" # This can be only used when bias correction is not-zero.
   export GENDIAG="NO"
   export SETUP='diag_rad=.false.,diag_pcp=.false.,diag_conv=.false.,diag_ozone=.false.,write_diag(3)=.false.,niter(2)=100,'
   export DIAG_TARBALL="YES"
-fi
-
-export npe_gsi=${npe_anal}
-
-if [[ "${CDUMP}" == "gfs" ]] ; then
-  export npe_gsi=${npe_anal_gfs}
-  export nth_anal=${nth_anal_gfs}
 fi
 
 # Set parameters specific to L127
@@ -35,6 +28,11 @@ fi
 # Set namelist option for LETKF
 export lobsdiag_forenkf=".false."  # anal does not need to write out jacobians
                    # set to .true. in config.eobs and config.eupd
+
+# Reduce number of iterations for testing mode
+if [[ ${DO_TEST_MODE} = "YES" ]]; then
+  export SETUP="${SETUP:-}niter(1)=5,niter(2)=5,"
+fi
 
 # Do not process the following datasets
 export GSNDBF=${GSNDBF:-/dev/null}

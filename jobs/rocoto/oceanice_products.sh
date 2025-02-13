@@ -12,26 +12,21 @@ source "${HOMEgfs}/ush/preamble.sh"
 status=$?
 if (( status != 0 )); then exit "${status}"; fi
 
-###############################################################
-# setup python path for workflow utilities and tasks
-wxflowPATH="${HOMEgfs}/ush/python:${HOMEgfs}/ush/python/wxflow/src"
-PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${wxflowPATH}"
-export PYTHONPATH
-
 export job="oceanice_products"
-export jobid="${job}.$$"
 
-###############################################################
-# shellcheck disable=SC2153,SC2001
-IFS='_' read -ra fhrs <<< "${FHRLST//f}" # strip off the 'f's and convert to array
+# shellcheck disable=SC2153
+IFS=', ' read -r -a fhr_list <<< "${FHR_LIST}"
 
-#---------------------------------------------------------------
-# Execute the JJOB
-for fhr in "${fhrs[@]}"; do
-    export FORECAST_HOUR=$(( 10#${fhr} ))
-    "${HOMEgfs}/jobs/JGLOBAL_OCEANICE_PRODUCTS"
-    status=$?
-    if (( status != 0 )); then exit "${status}"; fi
+export FORECAST_HOUR jobid
+for FORECAST_HOUR in "${fhr_list[@]}"; do
+	fhr3=$(printf '%03d' "${FORECAST_HOUR}")
+	jobid="${job}_${COMPONENT}_f${fhr3}.$$"
+	###############################################################
+	# Execute the JJOB
+	###############################################################
+	"${HOMEgfs}/jobs/JGLOBAL_OCEANICE_PRODUCTS"
+	status=$?
+	[[ ${status} -ne 0 ]] && exit "${status}"
 done
 
 exit 0

@@ -11,7 +11,7 @@ INTERP_ATMOS_SFLUXSH=${INTERP_ATMOS_SFLUXSH:-"${USHgfs}/interp_atmos_sflux.sh"}
 
 # Variables used in this job
 downset=${downset:-1}  # No. of groups of pressure grib2 products to create
-npe_atmos_products=${npe_atmos_products:-8}  # no. of processors available to process each group
+ntasks_atmos_products=${ntasks_atmos_products:-8}  # no. of processors available to process each group
 
 # WGNE related options
 WGNE=${WGNE:-NO}  # Create WGNE products
@@ -72,7 +72,7 @@ for (( nset=1 ; nset <= downset ; nset++ )); do
   echo "Begin processing nset = ${nset}"
 
   # Number of processors available to process $nset
-  nproc=${npe_atmos_products}
+  nproc=${ntasks}
 
   # Each set represents a group of files
   if (( nset == 1 )); then
@@ -104,7 +104,7 @@ for (( nset=1 ; nset <= downset ; nset++ )); do
     # grep returns 1 if no match is found, so temporarily turn off exit on non-zero rc
     set +e
     # shellcheck disable=SC2312
-    ${WGRIB2} -d "${last}" "${tmpfile}" | grep -E -i "ugrd|ustm|uflx|u-gwd|land"
+    ${WGRIB2} -d "${last}" "${tmpfile}" | grep -E -i "ugrd|ustm|uflx|u-gwd|land|maxuw"
     rc=$?
     set_strict
     if (( rc == 0 )); then  # Matched the grep

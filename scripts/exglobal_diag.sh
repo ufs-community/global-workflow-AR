@@ -26,7 +26,6 @@ pwd=$(pwd)
 
 # Base variables
 CDATE="${PDY}${cyc}"
-CDUMP=${CDUMP:-"gdas"}
 GDUMP=${GDUMP:-"gdas"}
 
 # Utilities
@@ -50,10 +49,10 @@ SENDDBN=${SENDDBN:-"NO"}
 
 # Analysis files
 export APREFIX=${APREFIX:-""}
-RADSTAT=${RADSTAT:-${COM_ATMOS_ANALYSIS}/${APREFIX}radstat}
-PCPSTAT=${PCPSTAT:-${COM_ATMOS_ANALYSIS}/${APREFIX}pcpstat}
-CNVSTAT=${CNVSTAT:-${COM_ATMOS_ANALYSIS}/${APREFIX}cnvstat}
-OZNSTAT=${OZNSTAT:-${COM_ATMOS_ANALYSIS}/${APREFIX}oznstat}
+RADSTAT=${RADSTAT:-${COMOUT_ATMOS_ANALYSIS}/${APREFIX}radstat}
+PCPSTAT=${PCPSTAT:-${COMOUT_ATMOS_ANALYSIS}/${APREFIX}pcpstat}
+CNVSTAT=${CNVSTAT:-${COMOUT_ATMOS_ANALYSIS}/${APREFIX}cnvstat}
+OZNSTAT=${OZNSTAT:-${COMOUT_ATMOS_ANALYSIS}/${APREFIX}oznstat}
 
 # Remove stat file if file already exists
 [[ -s $RADSTAT ]] && rm -f $RADSTAT
@@ -75,7 +74,7 @@ nm=""
 if [ $CFP_MP = "YES" ]; then
     nm=0
 fi
-DIAG_DIR=${DIAG_DIR:-${COM_ATMOS_ANALYSIS}/gsidiags}
+DIAG_DIR=${DIAG_DIR:-${COMOUT_ATMOS_ANALYSIS}/gsidiags}
 REMOVE_DIAG_DIR=${REMOVE_DIAG_DIR:-"NO"}
 
 # Set script / GSI control parameters
@@ -222,7 +221,7 @@ EOFdiag
       chmod 755 $DATA/mp_diag.sh
       ncmd=$(cat $DATA/mp_diag.sh | wc -l)
       if [ $ncmd -gt 0 ]; then
-         ncmd_max=$((ncmd < npe_node_max ? ncmd : npe_node_max))
+         ncmd_max=$((ncmd < max_tasks_per_node ? ncmd : max_tasks_per_node))
          APRUNCFP_DIAG=$(eval echo $APRUNCFP)
          $APRUNCFP_DIAG $DATA/mp_diag.sh
          export err=$?; err_chk
@@ -232,9 +231,11 @@ EOFdiag
    # Restrict diagnostic files containing rstprod data
    rlist="conv_gps conv_ps conv_pw conv_q conv_sst conv_t conv_uv saphir"
    for rtype in $rlist; do
-      set +e
-      ${CHGRP_CMD} *${rtype}*
-      ${STRICT_ON:-set -e}
+      for rfile in *"${rtype}"*; do 
+         if [[ -s "${rfile}" ]]; then
+            ${CHGRP_CMD} "${rfile}"
+         fi
+      done
    done
 
    # If requested, create diagnostic file tarballs

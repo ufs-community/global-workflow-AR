@@ -7,6 +7,7 @@ from collections import OrderedDict
 from typing import Dict
 from applications.applications import AppConfig
 from rocoto.workflow_tasks import get_wf_tasks
+from wxflow import to_timedelta
 import rocoto.rocoto as rocoto
 from abc import ABC, abstractmethod
 
@@ -18,7 +19,10 @@ class RocotoXML(ABC):
         self._app_config = app_config
         self.rocoto_config = rocoto_config
 
-        self._base = self._app_config.configs['base']
+        # Use the first config.base (sourced with an arbitrary RUN)
+        self._base = self._app_config.configs[next(iter(self._app_config.configs))]['base']
+        self._base['interval_gdas'] = to_timedelta(f'{self._base["assim_freq"]}H')
+        self._base['interval_gfs'] = to_timedelta(f'{self._base["INTERVAL_GFS"]}H')
 
         self.preamble = self._get_preamble()
         self.definitions = self._get_definitions()
@@ -157,10 +161,15 @@ class RocotoXML(ABC):
 
         strings = ['',
                    f'#################### {pslot} ####################',
-                   f'MAILTO="{replyto}"',
-                   f'{cronintstr} {rocotorunstr}',
-                   '#################################################################',
-                   '']
+                   f'MAILTO="{replyto}"'
+                   ]
+        # AWS need 'SHELL', and 'BASH_ENV' defined, or, the crontab job won't start.
+        if os.environ.get('PW_CSP', None) in ['aws', 'azure', 'google']:
+            strings.extend([f'SHELL="/bin/bash"',
+                            f'BASH_ENV="/etc/bashrc"'])
+        strings.extend([f'{cronintstr} {rocotorunstr}',
+                        '#################################################################',
+                        ''])
 
         if crontab_file is None:
             crontab_file = f"{expdir}/{pslot}.crontab"

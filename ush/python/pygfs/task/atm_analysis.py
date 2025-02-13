@@ -5,107 +5,159 @@ import glob
 import gzip
 import tarfile
 from logging import getLogger
-from typing import Dict, List, Any
-
+from pprint import pformat
+from typing import Any, Dict, List, Optional
 from wxflow import (AttrDict,
                     FileHandler,
                     add_to_datetime, to_fv3time, to_timedelta, to_YMDH,
-                    chdir,
+                    Task,
                     parse_j2yaml, save_as_yaml,
-                    logit,
-                    Executable,
-                    WorkflowException)
-from pygfs.task.analysis import Analysis
+                    logit)
+from pygfs.jedi import Jedi
 
 logger = getLogger(__name__.split('.')[-1])
 
 
-class AtmAnalysis(Analysis):
+class AtmAnalysis(Task):
     """
-    Class for global atm analysis tasks
+    Class for JEDI-based global atm analysis tasks
     """
     @logit(logger, name="AtmAnalysis")
-    def __init__(self, config):
+    def __init__(self, config: Dict[str, Any]):
+        """Constructor global atm analysis task
+
+        This method will construct a global atm analysis task.
+        This includes:
+        - extending the task_config attribute AttrDict to include parameters required for this task
+        - instantiate the Jedi attribute objects
+
+        Parameters
+        ----------
+        config: Dict
+            dictionary object containing task configuration
+
+        Returns
+        ----------
+        None
+        """
         super().__init__(config)
 
-        _res = int(self.config.CASE[1:])
-        _res_anl = int(self.config.CASE_ANL[1:])
-        _window_begin = add_to_datetime(self.runtime_config.current_cycle, -to_timedelta(f"{self.config.assim_freq}H") / 2)
-        _jedi_yaml = os.path.join(self.runtime_config.DATA, f"{self.runtime_config.CDUMP}.t{self.runtime_config.cyc:02d}z.atmvar.yaml")
+        _res = int(self.task_config.CASE[1:])
+        _res_anl = int(self.task_config.CASE_ANL[1:])
+        _window_begin = add_to_datetime(self.task_config.current_cycle, -to_timedelta(f"{self.task_config.assim_freq}H") / 2)
 
         # Create a local dictionary that is repeatedly used across this class
         local_dict = AttrDict(
             {
                 'npx_ges': _res + 1,
                 'npy_ges': _res + 1,
-                'npz_ges': self.config.LEVS - 1,
-                'npz': self.config.LEVS - 1,
+                'npz_ges': self.task_config.LEVS - 1,
+                'npz': self.task_config.LEVS - 1,
                 'npx_anl': _res_anl + 1,
                 'npy_anl': _res_anl + 1,
-                'npz_anl': self.config.LEVS - 1,
+                'npz_anl': self.task_config.LEVS - 1,
                 'ATM_WINDOW_BEGIN': _window_begin,
-                'ATM_WINDOW_LENGTH': f"PT{self.config.assim_freq}H",
-                'OPREFIX': f"{self.runtime_config.CDUMP}.t{self.runtime_config.cyc:02d}z.",  # TODO: CDUMP is being replaced by RUN
-                'APREFIX': f"{self.runtime_config.CDUMP}.t{self.runtime_config.cyc:02d}z.",  # TODO: CDUMP is being replaced by RUN
-                'GPREFIX': f"gdas.t{self.runtime_config.previous_cycle.hour:02d}z.",
-                'jedi_yaml': _jedi_yaml,
-                'atm_obsdatain_path': f"{self.runtime_config.DATA}/obs/",
-                'atm_obsdataout_path': f"{self.runtime_config.DATA}/diags/",
+                'ATM_WINDOW_LENGTH': f"PT{self.task_config.assim_freq}H",
+                'OPREFIX': f"{self.task_config.RUN}.t{self.task_config.cyc:02d}z.",
+                'APREFIX': f"{self.task_config.RUN}.t{self.task_config.cyc:02d}z.",
+                'GPREFIX': f"gdas.t{self.task_config.previous_cycle.hour:02d}z.",
+                'atm_obsdatain_path': f"{self.task_config.DATA}/obs/",
+                'atm_obsdataout_path': f"{self.task_config.DATA}/diags/",
                 'BKG_TSTEP': "PT1H"  # Placeholder for 4D applications
             }
         )
 
-        # task_config is everything that this task should need
-        self.task_config = AttrDict(**self.config, **self.runtime_config, **local_dict)
+        # Extend task_config with local_dict
+        self.task_config = AttrDict(**self.task_config, **local_dict)
+
+        # Create dictionary of Jedi objects
+        expected_keys = ['atmanlvar', 'atmanlfv3inc']
+        self.jedi_dict = Jedi.get_jedi_dict(self.task_config.JEDI_CONFIG_YAML, self.task_config, expected_keys)
 
     @logit(logger)
-    def initialize(self: Analysis) -> None:
+    def initialize(self) -> None:
         """Initialize a global atm analysis
 
-        This method will initialize a global atm analysis using JEDI.
+        This method will initialize a global atm analysis.
         This includes:
+        - initialize JEDI applications
+        - staging observation files
+        - staging bias correction files
         - staging CRTM fix files
         - staging FV3-JEDI fix files
         - staging B error files
         - staging model backgrounds
-        - generating a YAML file for the JEDI executable
         - creating output directories
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        ----------
+        None
         """
-        super().initialize()
+
+        # initialize JEDI variational application
+        logger.info(f"Initializing JEDI variational DA application")
+        self.jedi_dict['atmanlvar'].initialize(self.task_config)
+
+        # initialize JEDI FV3 increment conversion application
+        logger.info(f"Initializing JEDI FV3 increment conversion application")
+        self.jedi_dict['atmanlfv3inc'].initialize(self.task_config)
+
+        # stage observations
+        logger.info(f"Staging list of observation files")
+        obs_dict = self.jedi_dict['atmanlvar'].render_jcb(self.task_config, 'atm_obs_staging')
+        FileHandler(obs_dict).sync()
+        logger.debug(f"Observation files:\n{pformat(obs_dict)}")
+
+        # stage bias corrections
+        logger.info(f"Staging list of bias correction files")
+        bias_dict = self.jedi_dict['atmanlvar'].render_jcb(self.task_config, 'atm_bias_staging')
+        if bias_dict['copy'] is None:
+            logger.info(f"No bias correction files to stage")
+        else:
+            bias_dict['copy'] = Jedi.remove_redundant(bias_dict['copy'])
+            FileHandler(bias_dict).sync()
+            logger.debug(f"Bias correction files:\n{pformat(bias_dict)}")
+
+            # extract bias corrections
+            Jedi.extract_tar_from_filehandler_dict(bias_dict)
 
         # stage CRTM fix files
         logger.info(f"Staging CRTM fix files from {self.task_config.CRTM_FIX_YAML}")
-        crtm_fix_list = parse_j2yaml(self.task_config.CRTM_FIX_YAML, self.task_config)
-        FileHandler(crtm_fix_list).sync()
+        crtm_fix_dict = parse_j2yaml(self.task_config.CRTM_FIX_YAML, self.task_config)
+        FileHandler(crtm_fix_dict).sync()
+        logger.debug(f"CRTM fix files:\n{pformat(crtm_fix_dict)}")
 
         # stage fix files
         logger.info(f"Staging JEDI fix files from {self.task_config.JEDI_FIX_YAML}")
-        jedi_fix_list = parse_j2yaml(self.task_config.JEDI_FIX_YAML, self.task_config)
-        FileHandler(jedi_fix_list).sync()
+        jedi_fix_dict = parse_j2yaml(self.task_config.JEDI_FIX_YAML, self.task_config)
+        FileHandler(jedi_fix_dict).sync()
+        logger.debug(f"JEDI fix files:\n{pformat(jedi_fix_dict)}")
 
         # stage static background error files, otherwise it will assume ID matrix
         logger.info(f"Stage files for STATICB_TYPE {self.task_config.STATICB_TYPE}")
-        FileHandler(self.get_berror_dict(self.task_config)).sync()
+        if self.task_config.STATICB_TYPE != 'identity':
+            berror_staging_dict = parse_j2yaml(self.task_config.BERROR_STAGING_YAML, self.task_config)
+        else:
+            berror_staging_dict = {}
+        FileHandler(berror_staging_dict).sync()
+        logger.debug(f"Background error files:\n{pformat(berror_staging_dict)}")
 
         # stage ensemble files for use in hybrid background error
         if self.task_config.DOHYBVAR:
             logger.debug(f"Stage ensemble files for DOHYBVAR {self.task_config.DOHYBVAR}")
-            localconf = AttrDict()
-            keys = ['COM_ATMOS_RESTART_TMPL', 'previous_cycle', 'ROTDIR', 'RUN',
-                    'NMEM_ENS', 'DATA', 'current_cycle', 'ntiles']
-            for key in keys:
-                localconf[key] = self.task_config[key]
-            localconf.RUN = 'enkfgdas'
-            localconf.dirname = 'ens'
-            FileHandler(self.get_fv3ens_dict(localconf)).sync()
+            fv3ens_staging_dict = parse_j2yaml(self.task_config.FV3ENS_STAGING_YAML, self.task_config)
+            FileHandler(fv3ens_staging_dict).sync()
+            logger.debug(f"Ensemble files:\n{pformat(fv3ens_staging_dict)}")
 
         # stage backgrounds
-        FileHandler(self.get_bkg_dict(AttrDict(self.task_config))).sync()
-
-        # generate variational YAML file
-        logger.debug(f"Generate variational YAML file: {self.task_config.jedi_yaml}")
-        save_as_yaml(self.task_config.jedi_config, self.task_config.jedi_yaml)
-        logger.info(f"Wrote variational YAML to: {self.task_config.jedi_yaml}")
+        logger.info(f"Staging background files from {self.task_config.VAR_BKG_STAGING_YAML}")
+        bkg_staging_dict = parse_j2yaml(self.task_config.VAR_BKG_STAGING_YAML, self.task_config)
+        FileHandler(bkg_staging_dict).sync()
+        logger.debug(f"Background files:\n{pformat(bkg_staging_dict)}")
 
         # need output dir for diags and anl
         logger.debug("Create empty output [anl, diags] directories to receive output from executable")
@@ -116,54 +168,23 @@ class AtmAnalysis(Analysis):
         FileHandler({'mkdir': newdirs}).sync()
 
     @logit(logger)
-    def variational(self: Analysis) -> None:
+    def execute(self, jedi_dict_key: str) -> None:
+        """Execute JEDI application of atm analysis
 
-        chdir(self.task_config.DATA)
+        Parameters
+        ----------
+        jedi_dict_key
+            key specifying particular Jedi object in self.jedi_dict
 
-        exec_cmd = Executable(self.task_config.APRUN_ATMANLVAR)
-        exec_name = os.path.join(self.task_config.DATA, 'gdas.x')
-        exec_cmd.add_default_arg(exec_name)
-        exec_cmd.add_default_arg('fv3jedi')
-        exec_cmd.add_default_arg('variational')
-        exec_cmd.add_default_arg(self.task_config.jedi_yaml)
+        Returns
+        ----------
+        None
+        """
 
-        try:
-            logger.debug(f"Executing {exec_cmd}")
-            exec_cmd()
-        except OSError:
-            raise OSError(f"Failed to execute {exec_cmd}")
-        except Exception:
-            raise WorkflowException(f"An error occured during execution of {exec_cmd}")
-
-        pass
+        self.jedi_dict[jedi_dict_key].execute()
 
     @logit(logger)
-    def init_fv3_increment(self: Analysis) -> None:
-        # Setup JEDI YAML file
-        self.task_config.jedi_yaml = os.path.join(self.runtime_config.DATA,
-                                                  f"{self.task_config.JCB_ALGO}.yaml")
-        save_as_yaml(self.get_jedi_config(self.task_config.JCB_ALGO), self.task_config.jedi_yaml)
-
-        # Link JEDI executable to run directory
-        self.task_config.jedi_exe = self.link_jediexe()
-
-    @logit(logger)
-    def fv3_increment(self: Analysis) -> None:
-        # Run executable
-        exec_cmd = Executable(self.task_config.APRUN_ATMANLFV3INC)
-        exec_cmd.add_default_arg(self.task_config.jedi_exe)
-        exec_cmd.add_default_arg(self.task_config.jedi_yaml)
-
-        try:
-            logger.debug(f"Executing {exec_cmd}")
-            exec_cmd()
-        except OSError:
-            raise OSError(f"Failed to execute {exec_cmd}")
-        except Exception:
-            raise WorkflowException(f"An error occured during execution of {exec_cmd}")
-
-    @logit(logger)
-    def finalize(self: Analysis) -> None:
+    def finalize(self) -> None:
         """Finalize a global atm analysis
 
         This method will finalize a global atm analysis using JEDI.
@@ -171,9 +192,16 @@ class AtmAnalysis(Analysis):
         - tar output diag files and place in ROTDIR
         - copy the generated YAML file from initialize to the ROTDIR
         - copy the updated bias correction files to ROTDIR
-        - write UFS model readable atm incrment file
 
+        Parameters
+        ----------
+        None
+
+        Returns
+        ----------
+        None
         """
+
         # ---- tar up diags
         # path of output tar statfile
         atmstat = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, f"{self.task_config.APREFIX}atmstat")
@@ -196,55 +224,55 @@ class AtmAnalysis(Analysis):
                 diaggzip = f"{diagfile}.gz"
                 archive.add(diaggzip, arcname=os.path.basename(diaggzip))
 
+        # get list of yamls to copy to ROTDIR
+        yamls = glob.glob(os.path.join(self.task_config.DATA, '*atm*yaml'))
+
         # copy full YAML from executable to ROTDIR
-        logger.info(f"Copying {self.task_config.jedi_yaml} to {self.task_config.COM_ATMOS_ANALYSIS}")
-        src = os.path.join(self.task_config.DATA, f"{self.task_config.CDUMP}.t{self.task_config.cyc:02d}z.atmvar.yaml")
-        dest = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, f"{self.task_config.CDUMP}.t{self.task_config.cyc:02d}z.atmvar.yaml")
-        logger.debug(f"Copying {src} to {dest}")
-        yaml_copy = {
-            'mkdir': [self.task_config.COM_ATMOS_ANALYSIS],
-            'copy': [[src, dest]]
+        for src in yamls:
+            yaml_base = os.path.splitext(os.path.basename(src))[0]
+            dest_yaml_name = f"{self.task_config.RUN}.t{self.task_config.cyc:02d}z.{yaml_base}.yaml"
+            dest = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, dest_yaml_name)
+            logger.debug(f"Copying {src} to {dest}")
+            yaml_copy = {
+                'copy': [[src, dest]]
+            }
+            FileHandler(yaml_copy).sync()
+
+        # path of output radiance bias correction tarfile
+        bfile = f"{self.task_config.APREFIX}rad_varbc_params.tar"
+        radtar = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, bfile)
+
+        # rename and copy tlapse radiance bias correction files from obs to bc
+        tlapobs = glob.glob(os.path.join(self.task_config.DATA, 'obs', '*tlapse.txt'))
+        copylist = []
+        for tlapfile in tlapobs:
+            obsfile = os.path.basename(tlapfile).split('.', 2)
+            newfile = f"{self.task_config.APREFIX}{obsfile[2]}"
+            copylist.append([tlapfile, os.path.join(self.task_config.DATA, 'bc', newfile)])
+        tlapse_dict = {
+            'copy': copylist
         }
-        FileHandler(yaml_copy).sync()
+        FileHandler(tlapse_dict).sync()
 
-        # copy bias correction files to ROTDIR
-        logger.info("Copy bias correction files from DATA/ to COM/")
-        biasdir = os.path.join(self.task_config.DATA, 'bc')
-        biasls = os.listdir(biasdir)
-        biaslist = []
-        for bfile in biasls:
-            src = os.path.join(biasdir, bfile)
-            dest = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, bfile)
-            biaslist.append([src, dest])
+        # get lists of radiance bias correction files to add to tarball
+        satlist = glob.glob(os.path.join(self.task_config.DATA, 'bc', '*satbias*nc'))
+        tlaplist = glob.glob(os.path.join(self.task_config.DATA, 'bc', '*tlapse.txt'))
 
-        gprefix = f"{self.task_config.GPREFIX}"
-        gsuffix = f"{to_YMDH(self.task_config.previous_cycle)}" + ".txt"
-        aprefix = f"{self.task_config.APREFIX}"
-        asuffix = f"{to_YMDH(self.task_config.current_cycle)}" + ".txt"
-
-        logger.info(f"Copying {gprefix}*{gsuffix} from DATA/ to COM/ as {aprefix}*{asuffix}")
-        obsdir = os.path.join(self.task_config.DATA, 'obs')
-        obsls = os.listdir(obsdir)
-        for ofile in obsls:
-            if ofile.endswith(".txt"):
-                src = os.path.join(obsdir, ofile)
-                tfile = ofile.replace(gprefix, aprefix)
-                tfile = tfile.replace(gsuffix, asuffix)
-                dest = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, tfile)
-                biaslist.append([src, dest])
-
-        bias_copy = {
-            'mkdir': [self.task_config.COM_ATMOS_ANALYSIS],
-            'copy': biaslist,
-        }
-        FileHandler(bias_copy).sync()
+        # tar radiance bias correction files to ROTDIR
+        logger.info(f"Creating radiance bias correction tar file {radtar}")
+        with tarfile.open(radtar, 'w') as radbcor:
+            for satfile in satlist:
+                radbcor.add(satfile, arcname=os.path.basename(satfile))
+            for tlapfile in tlaplist:
+                radbcor.add(tlapfile, arcname=os.path.basename(tlapfile))
+            logger.info(f"Add {radbcor.getnames()}")
 
         # Copy FV3 atm increment to comrot directory
         logger.info("Copy UFS model readable atm increment file")
         cdate = to_fv3time(self.task_config.current_cycle)
         cdate_inc = cdate.replace('.', '_')
         src = os.path.join(self.task_config.DATA, 'anl', f"atminc.{cdate_inc}z.nc4")
-        dest = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, f'{self.task_config.CDUMP}.t{self.task_config.cyc:02d}z.atminc.nc')
+        dest = os.path.join(self.task_config.COM_ATMOS_ANALYSIS, f'{self.task_config.RUN}.t{self.task_config.cyc:02d}z.atminc.nc')
         logger.debug(f"Copying {src} to {dest}")
         inc_copy = {
             'copy': [[src, dest]]
@@ -253,189 +281,3 @@ class AtmAnalysis(Analysis):
 
     def clean(self):
         super().clean()
-
-    @logit(logger)
-    def get_bkg_dict(self, task_config: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Compile a dictionary of model background files to copy
-
-        This method constructs a dictionary of FV3 restart files (coupler, core, tracer)
-        that are needed for global atm DA and returns said dictionary for use by the FileHandler class.
-
-        Parameters
-        ----------
-        task_config: Dict
-            a dictionary containing all of the configuration needed for the task
-
-        Returns
-        ----------
-        bkg_dict: Dict
-            a dictionary containing the list of model background files to copy for FileHandler
-        """
-        # NOTE for now this is FV3 restart files and just assumed to be fh006
-
-        # get FV3 restart files, this will be a lot simpler when using history files
-        rst_dir = os.path.join(task_config.COM_ATMOS_RESTART_PREV)  # for now, option later?
-        run_dir = os.path.join(task_config.DATA, 'bkg')
-
-        # Start accumulating list of background files to copy
-        bkglist = []
-
-        # atm DA needs coupler
-        basename = f'{to_fv3time(task_config.current_cycle)}.coupler.res'
-        bkglist.append([os.path.join(rst_dir, basename), os.path.join(run_dir, basename)])
-
-        # atm DA needs core, srf_wnd, tracer, phy_data, sfc_data
-        for ftype in ['core', 'srf_wnd', 'tracer']:
-            template = f'{to_fv3time(self.task_config.current_cycle)}.fv_{ftype}.res.tile{{tilenum}}.nc'
-            for itile in range(1, task_config.ntiles + 1):
-                basename = template.format(tilenum=itile)
-                bkglist.append([os.path.join(rst_dir, basename), os.path.join(run_dir, basename)])
-
-        for ftype in ['phy_data', 'sfc_data']:
-            template = f'{to_fv3time(self.task_config.current_cycle)}.{ftype}.tile{{tilenum}}.nc'
-            for itile in range(1, task_config.ntiles + 1):
-                basename = template.format(tilenum=itile)
-                bkglist.append([os.path.join(rst_dir, basename), os.path.join(run_dir, basename)])
-
-        bkg_dict = {
-            'mkdir': [run_dir],
-            'copy': bkglist,
-        }
-        return bkg_dict
-
-    @logit(logger)
-    def get_berror_dict(self, config: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Compile a dictionary of background error files to copy
-
-        This method will construct a dictionary of either bump of gsibec background
-        error files for global atm DA and return said dictionary for use by the
-        FileHandler class.
-
-        Parameters
-        ----------
-        config: Dict
-            a dictionary containing all of the configuration needed
-
-        Returns
-        ----------
-        berror_dict: Dict
-            a dictionary containing the list of atm background error files to copy for FileHandler
-        """
-        SUPPORTED_BERROR_STATIC_MAP = {'identity': self._get_berror_dict_identity,
-                                       'bump': self._get_berror_dict_bump,
-                                       'gsibec': self._get_berror_dict_gsibec}
-
-        try:
-            berror_dict = SUPPORTED_BERROR_STATIC_MAP[config.STATICB_TYPE](config)
-        except KeyError:
-            raise KeyError(f"{config.STATICB_TYPE} is not a supported background error type.\n" +
-                           f"Currently supported background error types are:\n" +
-                           f'{" | ".join(SUPPORTED_BERROR_STATIC_MAP.keys())}')
-
-        return berror_dict
-
-    @staticmethod
-    @logit(logger)
-    def _get_berror_dict_identity(config: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Identity BE does not need any files for staging.
-
-        This is a private method and should not be accessed directly.
-
-        Parameters
-        ----------
-        config: Dict
-            a dictionary containing all of the configuration needed
-        Returns
-        ----------
-        berror_dict: Dict
-            Empty dictionary [identity BE needs not files to stage]
-        """
-        logger.info(f"Identity background error does not use staged files.  Return empty dictionary")
-        return {}
-
-    @staticmethod
-    @logit(logger)
-    def _get_berror_dict_bump(config: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Compile a dictionary of atm bump background error files to copy
-
-        This method will construct a dictionary of atm bump background error
-        files for global atm DA and return said dictionary to the parent
-
-        This is a private method and should not be accessed directly.
-
-        Parameters
-        ----------
-        config: Dict
-            a dictionary containing all of the configuration needed
-
-        Returns
-        ----------
-        berror_dict: Dict
-            a dictionary of atm bump background error files to copy for FileHandler
-        """
-        # BUMP atm static-B needs nicas, cor_rh, cor_rv and stddev files.
-        b_dir = config.BERROR_DATA_DIR
-        b_datestr = to_fv3time(config.BERROR_DATE)
-        berror_list = []
-        for ftype in ['cor_rh', 'cor_rv', 'stddev']:
-            coupler = f'{b_datestr}.{ftype}.coupler.res'
-            berror_list.append([
-                os.path.join(b_dir, coupler), os.path.join(config.DATA, 'berror', coupler)
-            ])
-
-            template = '{b_datestr}.{ftype}.fv_tracer.res.tile{{tilenum}}.nc'
-            for itile in range(1, config.ntiles + 1):
-                tracer = template.format(tilenum=itile)
-                berror_list.append([
-                    os.path.join(b_dir, tracer), os.path.join(config.DATA, 'berror', tracer)
-                ])
-
-        nproc = config.ntiles * config.layout_x * config.layout_y
-        for nn in range(1, nproc + 1):
-            berror_list.append([
-                os.path.join(b_dir, f'nicas_aero_nicas_local_{nproc:06}-{nn:06}.nc'),
-                os.path.join(config.DATA, 'berror', f'nicas_aero_nicas_local_{nproc:06}-{nn:06}.nc')
-            ])
-
-        # create dictionary of background error files to stage
-        berror_dict = {
-            'mkdir': [os.path.join(config.DATA, 'berror')],
-            'copy': berror_list,
-        }
-        return berror_dict
-
-    @staticmethod
-    @logit(logger)
-    def _get_berror_dict_gsibec(config: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Compile a dictionary of atm gsibec background error files to copy
-
-        This method will construct a dictionary of atm gsibec background error
-        files for global atm DA and return said dictionary to the parent
-
-        This is a private method and should not be accessed directly.
-
-        Parameters
-        ----------
-        config: Dict
-            a dictionary containing all of the configuration needed
-
-        Returns
-        ----------
-        berror_dict: Dict
-            a dictionary of atm gsibec background error files to copy for FileHandler
-        """
-        # GSI atm static-B needs namelist and coefficient files.
-        b_dir = os.path.join(config.HOMEgfs, 'fix', 'gdas', 'gsibec', config.CASE_ANL)
-        berror_list = []
-        for ftype in ['gfs_gsi_global.nml', 'gsi-coeffs-gfs-global.nc4']:
-            berror_list.append([
-                os.path.join(b_dir, ftype),
-                os.path.join(config.DATA, 'berror', ftype)
-            ])
-
-        # create dictionary of background error files to stage
-        berror_dict = {
-            'mkdir': [os.path.join(config.DATA, 'berror')],
-            'copy': berror_list,
-        }
-        return berror_dict

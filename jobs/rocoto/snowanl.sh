@@ -12,9 +12,11 @@ export job="snowanl"
 export jobid="${job}.$$"
 
 ###############################################################
-# setup python path for workflow utilities and tasks
-wxflowPATH="${HOMEgfs}/ush/python:${HOMEgfs}/ush/python/wxflow/src"
-PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}${wxflowPATH}"
+# setup python path for ioda utilities
+# shellcheck disable=SC2311
+pyiodaPATH="${HOMEgfs}/sorc/gdas.cd/build/lib/python$(detect_py_ver)/"
+gdasappPATH="${HOMEgfs}/sorc/gdas.cd/sorc/iodaconv/src:${pyiodaPATH}"
+PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}:${gdasappPATH}"
 export PYTHONPATH
 
 ###############################################################

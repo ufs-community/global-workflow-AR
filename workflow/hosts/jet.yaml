@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 BASE_GIT: '/lfs4/HFIP/hfv3gfs/glopara/git'
 DMPDIR: '/lfs4/BMC/nrtrr/gge/ufs-ar/dump/6hourly'
 BASE_CPLIC: '/mnt/lfs4/HFIP/hfv3gfs/glopara/data/ICSDIR/prototype_ICs'
@@ -6,6 +7,17 @@ COMINsyn: '/lfs4/HFIP/hfv3gfs/glopara/com/gfs/prod/syndat'
 HOMEDIR: '/lfs4/BMC/nrtrr/gge/ufs-ar/noscrub'
 STMP: '/lfs4/BMC/nrtrr/gge/ufs-ar/stmp'
 PTMP: '/lfs4/BMC/nrtrr/gge/ufs-ar/ptmp'
+=======
+BASE_GIT: '/lfs5/HFIP/hfv3gfs/glopara/git'
+DMPDIR: '/lfs5/HFIP/hfv3gfs/glopara/dump'
+BASE_DATA: '/lfs5/HFIP/hfv3gfs/glopara/data'
+BASE_IC: '/mnt/lfs5/HFIP/hfv3gfs/glopara/data/ICSDIR'
+PACKAGEROOT: '/lfs5/HFIP/hfv3gfs/glopara/nwpara'
+COMINsyn: '/lfs5/HFIP/hfv3gfs/glopara/com/gfs/prod/syndat'
+HOMEDIR: '/lfs5/HFIP/hfv3gfs/${USER}'
+STMP: '/lfs5/HFIP/hfv3gfs/${USER}/stmp'
+PTMP: '/lfs5/HFIP/hfv3gfs/${USER}/ptmp'
+>>>>>>> global-workflow/develop
 NOSCRUB: $HOMEDIR
 ACCOUNT: rtwrfruc
 ACCOUNT_SERVICE: nrtrr
@@ -14,8 +26,13 @@ QUEUE: rth
 QUEUE_SERVICE: batch
 PARTITION_BATCH: kjet
 PARTITION_SERVICE: service
+<<<<<<< HEAD
 RESERVATION: rrfsens
+=======
+RESERVATION: ''
+>>>>>>> global-workflow/develop
 CHGRP_RSTPROD: 'YES'
+CLUSTERS: ''
 CHGRP_CMD: 'chgrp rstprod'
 HPSSARCH: 'YES'
 HPSS_PROJECT: wrfruc
@@ -23,7 +40,15 @@ LOCALARCH: 'NO'
 ATARDIR: '/ESRL/BMC/wrfruc/5year/ufsar/${USER}/${machine}/${PSLOT}'
 MAKE_NSSTBUFR: 'NO'
 MAKE_ACFTBUFR: 'NO'
+<<<<<<< HEAD
 SUPPORTED_RESOLUTIONS: ['C768', 'C384', 'C192', 'C96', 'C48']
 COMINecmwf: /mnt/lfs4/HFIP/hfv3gfs/glopara/data/external_gempak/ecmwf
 COMINnam: /mnt/lfs4/HFIP/hfv3gfs/glopara/data/external_gempak/nam
 COMINukmet: /mnt/lfs4/HFIP/hfv3gfs/glopara/data/external_gempak/ukmet
+=======
+SUPPORTED_RESOLUTIONS: ['C384', 'C192', 'C96', 'C48']
+COMINecmwf: /mnt/lfs5/HFIP/hfv3gfs/glopara/data/external_gempak/ecmwf
+COMINnam: /mnt/lfs5/HFIP/hfv3gfs/glopara/data/external_gempak/nam
+COMINukmet: /mnt/lfs5/HFIP/hfv3gfs/glopara/data/external_gempak/ukmet
+AERO_INPUTS_DIR: /lfs5/HFIP/hfv3gfs/glopara/data/gocart_emissions
+>>>>>>> global-workflow/develop
